@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/cinema_db
+    username: cinema_user                             # TODO: à changer
+    password: cinema_password                         # TODO: à changer
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate #car j'utilise flyway, donc pas besoin d'avoir une génération des table sql depuis les entity
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+rustfs:
+  url: http://localhost:9000
+  access-key: rustfsadmin
+  secret-key: rustfsadmin
+  bucket-name: cinema-media
+  region: us-east-1

@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:15.19
+    container_name: cinema-postgres
+    environment:
+      POSTGRES_DB: cinema_db
+      POSTGRES_USER: cinema_user          #TODO: a changer
+      POSTGRES_PASSWORD: cinema_password  #TODO: à changer plus tard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0
+    container_name: cinema-rustfs
+    ports:
+      - "9000:9000"
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin  #TODO: a changer
+      RUSTFS_SECRET_KEY: rustfsadmin  #TODO: a changer
+    volumes:
+      - s3bucket:/data
+
+volumes:
+  postgres_data:
+  s3bucket:
+  
