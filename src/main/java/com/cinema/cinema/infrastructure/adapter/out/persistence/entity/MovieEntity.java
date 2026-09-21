@@ -6,7 +6,6 @@ import lombok.Setter;
 
 @Entity
 @Table(name="movies")
-@Getter @Setter
 public class MovieEntity {
 
     @Id
@@ -14,6 +13,46 @@ public class MovieEntity {
     private Long id;
     private String title;
     private String description;
-    private int duration_minutes;
-    private String poster_file_name;
+    private int durationMinutes;
+    private String posterFileName;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public int getDurationMinutes() {
+        return durationMinutes;
+    }
+
+    public void setDurationMinutes(int durationMinutes) {
+        this.durationMinutes = durationMinutes;
+    }
+
+    public String getPosterFileName() {
+        return posterFileName;
+    }
+
+    public void setPosterFileName(String posterFileName) {
+        this.posterFileName = posterFileName;
+    }
 }

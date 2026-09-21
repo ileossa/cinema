@@ -1,9 +1,10 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/cinema_db
-    username: cinema_user                             # TODO: à changer
-    password: cinema_password                         # TODO: à changer
+  postgresql:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cinema_db}
+    username: ${SPRING_DATASOURCE_USERNAME:cinema_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:cinema_password}
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: validate #car j'utilise flyway, donc pas besoin d'avoir une génération des table sql depuis les entity

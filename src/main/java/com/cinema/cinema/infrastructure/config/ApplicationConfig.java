@@ -1,7 +1,7 @@
 package com.cinema.cinema.infrastructure.config;
 
-import com.cinema.cinema.domain.port.out.MediaStoragePort;
-import com.cinema.cinema.domain.port.out.MovieRepositoryPort;
+import com.cinema.cinema.domain.port.out.MediaStorageOut;
+import com.cinema.cinema.domain.port.out.MovieRepositoryOut;
 import com.cinema.cinema.domain.port.out.ScreeningRepositoryOut;
 import com.cinema.cinema.domain.service.MovieService;
 import com.cinema.cinema.domain.service.ScreeningService;
@@ -21,18 +21,18 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 public class ApplicationConfig {
 
     @Bean
-    public MovieRepositoryPort movieRepositoryPort(SpringDataMovieRepository springDataMovieRepository) {
+    public MovieRepositoryOut movieRepositoryPort(SpringDataMovieRepository springDataMovieRepository) {
         return new PostgresMovieAdapter(springDataMovieRepository);
     }
 
     @Bean
-    public MediaStoragePort mediaStoragePort(S3Presigner s3Presigner, @Value("${rustfs.bucket-name}") String bucketName) {
+    public MediaStorageOut mediaStoragePort(S3Presigner s3Presigner, @Value("${rustfs.bucket-name}") String bucketName) {
         return new RustFsStorageAdapter(s3Presigner, bucketName);
     }
 
     @Bean
-    public MovieService movieService(MovieRepositoryPort movieRepositoryPort, MediaStoragePort mediaStoragePort) {
-        return new MovieService(movieRepositoryPort, mediaStoragePort);
+    public MovieService movieService(MovieRepositoryOut movieRepositoryOut, MediaStorageOut mediaStorageOut) {
+        return new MovieService(movieRepositoryOut, mediaStorageOut);
     }
 
     @Bean

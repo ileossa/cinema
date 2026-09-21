@@ -2,27 +2,27 @@ package com.cinema.cinema.domain.service;
 
 import com.cinema.cinema.domain.model.Movie;
 import com.cinema.cinema.domain.port.in.GetMoviesCurrentlyInTheaterUseCase;
-import com.cinema.cinema.domain.port.out.MediaStoragePort;
-import com.cinema.cinema.domain.port.out.MovieRepositoryPort;
+import com.cinema.cinema.domain.port.out.MediaStorageOut;
+import com.cinema.cinema.domain.port.out.MovieRepositoryOut;
 
 import java.util.List;
 
 public class MovieService implements GetMoviesCurrentlyInTheaterUseCase {
 
-    private final MovieRepositoryPort movieRepositoryPort;
-    private final MediaStoragePort mediaStoragePort;
+    private final MovieRepositoryOut movieRepositoryOut;
+    private final MediaStorageOut mediaStorageOut;
 
-    public MovieService(MovieRepositoryPort movieRepositoryPort, MediaStoragePort mediaStoragePort) {
-        this.movieRepositoryPort = movieRepositoryPort;
-        this.mediaStoragePort = mediaStoragePort;
+    public MovieService(MovieRepositoryOut movieRepositoryOut, MediaStorageOut mediaStorageOut) {
+        this.movieRepositoryOut = movieRepositoryOut;
+        this.mediaStorageOut = mediaStorageOut;
     }
 
     @Override
     public List<Movie> getMoviesCurrentlyInTheater() {
-        return movieRepositoryPort.getMovies().stream().map(movie -> {
-            if( movie.poster() != null ) {
-                String urlSigned = mediaStoragePort.generateUrlAccesMedia(movie.poster());
-                return movie.withUrlPoster(urlSigned);
+        return movieRepositoryOut.getMovies().stream().map(movie -> {
+            if( movie.poster() != null || movie.poster().isBlank()) {
+                String urlSigned = mediaStorageOut.generateUrlAccesMedia(movie.poster());
+                return movie.withPosterUrl(urlSigned);
             }
             return movie;
         }).toList();

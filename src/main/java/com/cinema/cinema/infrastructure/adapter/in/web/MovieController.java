@@ -10,10 +10,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/movies")
-public class FilmController {
+public class MovieController {
     private final GetMoviesCurrentlyInTheaterUseCase getMoviesCurrentlyInTheaterUseCase;
 
-    public FilmController(GetMoviesCurrentlyInTheaterUseCase getMoviesCurrentlyInTheaterUseCase) {
+    public MovieController(GetMoviesCurrentlyInTheaterUseCase getMoviesCurrentlyInTheaterUseCase) {
         this.getMoviesCurrentlyInTheaterUseCase = getMoviesCurrentlyInTheaterUseCase;
     }
 

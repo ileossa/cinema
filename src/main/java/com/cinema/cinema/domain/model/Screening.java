@@ -1,5 +1,6 @@
 package com.cinema.cinema.domain.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record Screening(
@@ -8,5 +9,5 @@ public record Screening(
         LocalDateTime startDateTime,
         String room,
         int availableSeats,
-        double unitPrice
+        BigDecimal unitPrice
 ) {}

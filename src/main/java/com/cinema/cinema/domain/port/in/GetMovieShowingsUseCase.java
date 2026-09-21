@@ -4,5 +4,5 @@ import com.cinema.cinema.domain.model.Screening;
 import java.util.List;
 
 public interface GetMovieShowingsUseCase {
-    List<Screening> getMovieShowings(Long id);
+    List<Screening> getMovieShowings(Long movieId);
 }

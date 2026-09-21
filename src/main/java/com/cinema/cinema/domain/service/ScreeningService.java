@@ -14,7 +14,7 @@ public class ScreeningService implements GetMovieShowingsUseCase {
     }
 
     @Override
-    public List<Screening> getMovieShowings(Long id) {
-        return screeningRepositoryOut.findByMovieId(id);
+    public List<Screening> getMovieShowings(Long movieId) {
+        return screeningRepositoryOut.findByMovieId(movieId);
     }
 }

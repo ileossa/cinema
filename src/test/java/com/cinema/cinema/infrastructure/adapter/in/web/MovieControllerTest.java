@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(FilmController.class)
+@WebMvcTest(MovieController.class)
 public class MovieControllerTest {
     @Autowired
     private MockMvc mockMvc;
@@ -30,7 +30,7 @@ public class MovieControllerTest {
         Movie movie = new Movie(1L, "Dune", "Un film épique", 155, "dune.jpg", "http://minio/dune.jpg");
         given(getMoviesCurrentlyInTheaterUseCase.getMoviesCurrentlyInTheater()).willReturn(List.of(movie));
 
-        mockMvc.perform(get("/api/v1/films"))
+        mockMvc.perform(get("/api/v1/movies"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].titre").value("Dune"))
                 .andExpect(jsonPath("$[0].urlAffiche").value("http://minio/dune.jpg"));

@@ -4,6 +4,6 @@ import com.cinema.cinema.domain.model.Movie;
 
 import java.util.List;
 
-public interface MovieRepositoryPort {
+public interface MovieRepositoryOut {
     List<Movie> getMovies();
 }
