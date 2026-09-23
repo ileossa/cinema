@@ -3,13 +3,21 @@ services:
     image: postgres:15.19
     container_name: cinema-postgres
     environment:
-      POSTGRES_DB: cinema_db
-      POSTGRES_USER: cinema_user          #TODO: a changer
-      POSTGRES_PASSWORD: cinema_password  #TODO: à changer plus tard
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
 
   rustfs:
     image: rustfs/rustfs:1.0.0
@@ -17,12 +25,37 @@ services:
     ports:
       - "9000:9000"
     environment:
-      RUSTFS_ACCESS_KEY: rustfsadmin  #TODO: a changer
-      RUSTFS_SECRET_KEY: rustfsadmin  #TODO: a changer
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
     volumes:
       - s3bucket:/data
+
+  app:
+    build: .
+    container_name: cinema-app
+    ports:
+      - "8080:8080"
+    environment:
+      # permet d'importer directement les secrets Docker pour injecter à la place de la variable.
+      # Le nom du fichier db_password.txt devient ${db_password}
+      SPRING_CONFIG_IMPORT: "optional:configtree:/run/secrets/"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      # Il faut effectuer une echape de la variable pour indiquer à docker-compose
+      # qu'il faut laisser spring utiliser COnfig Trees, et non la remplacer par une var docker
+      # donc on fais un double échappe pour transmettre la variable brute à spring.
+      # Et donc aller chercher la variable brute dans le fichier .secrets/db_password.txt
+      SPRING_DATASOURCE_PASSWORD: "$${db_password}"
+    secrets:
+      - db_password
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   s3bucket:
-  
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt

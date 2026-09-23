@@ -1,0 +1,10 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+.secret/
+secrets/
+.env
+HELP.md
+docker-compose*.yaml
