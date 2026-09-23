@@ -1,7 +1,7 @@
 package com.cinema.cinema.infrastructure.adapter.in.web;
 
-import com.cinema.cinema.domain.model.Screening;
 import com.cinema.cinema.domain.port.in.GetMovieShowingsUseCase;
+import com.cinema.cinema.infrastructure.adapter.in.web.dto.ScreeningResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,7 +20,9 @@ public class ScreeningController {
     }
 
     @GetMapping
-    public List<Screening> getScreeningsByMovie(@RequestParam("movieId") Long movieId){
-        return getMovieShowingsUseCase.getMovieShowings(movieId);
+    public List<ScreeningResponse> getScreeningsByMovie(@RequestParam("movieId") Long movieId){
+        return getMovieShowingsUseCase.getMovieShowings(movieId).stream()
+                .map(ScreeningResponse::fromDomain)
+                .toList();
     }
 }

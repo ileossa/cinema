@@ -1,7 +1,7 @@
 package com.cinema.cinema.infrastructure.adapter.in.web;
 
-import com.cinema.cinema.domain.model.Movie;
 import com.cinema.cinema.domain.port.in.GetMoviesCurrentlyInTheaterUseCase;
+import com.cinema.cinema.infrastructure.adapter.in.web.dto.MovieResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,7 +18,10 @@ public class MovieController {
     }
 
     @GetMapping
-    public List<Movie> getMovies() {
-        return getMoviesCurrentlyInTheaterUseCase.getMoviesCurrentlyInTheater();
+    public List<MovieResponse> getMovies() {
+
+        return getMoviesCurrentlyInTheaterUseCase.getMoviesCurrentlyInTheater().stream()
+                .map(MovieResponse::fromDomain)
+                .toList();
     }
 }

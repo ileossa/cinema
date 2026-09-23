@@ -1,8 +1,6 @@
 package com.cinema.cinema.infrastructure.adapter.out.persistence.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
 
 @Entity
 @Table(name="movies")
