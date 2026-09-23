@@ -34,3 +34,4 @@ build/
 
 ### Envirronements variables (docker) ###
 .env
+/.secrets/db_password.txt
