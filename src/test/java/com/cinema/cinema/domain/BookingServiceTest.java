@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -298,5 +299,180 @@ public class BookingServiceTest {
         // THEN
         assertEquals(1, bookings.size());
         assertEquals(100L, bookings.get(0).id());
+    }
+
+    @Test
+    void should_require_booking_to_be_in_pending_status_before_payment() {
+        // GIVEN
+        Long bookingId = 100L;
+        Long userId = 1L;
+        Booking alreadyConfirmedBooking = new Booking(
+                bookingId,
+                userId,
+                new BigDecimal("25.00"),
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now().plusMinutes(10),
+                LocalDateTime.now(),
+                List.of(new BookingItem(1L, bookingId, 10L, 2, new BigDecimal("12.50")))
+        );
+
+        when(bookingRepositoryMock.findById(bookingId)).thenReturn(Optional.of(alreadyConfirmedBooking));
+
+        // WHEN & THEN
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                bookingService.confirmBookingPayment(bookingId)
+        );
+
+        assertEquals("Only PENDING bookings can be confirmed", exception.getMessage());
+        verify(paymentGatewayMock, never()).processPayment(any(), any(), any());
+        verify(notificationMock, never()).sendBookingConfirmationEmail(any(), any());
+    }
+
+    @Test
+    void should_require_user_to_be_connected_to_block_seats_for_15_minutes() {
+        // GIVEN
+        Long unauthenticatedUserId = null;
+        BookingItem item = new BookingItem(null, null, 10L, 2, new BigDecimal("12.50"));
+        List<BookingItem> items = List.of(item);
+
+        // WHEN & THEN
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                bookingService.createBooking(unauthenticatedUserId, items)
+        );
+
+        assertEquals("User id cannot be null", exception.getMessage());
+        verify(screeningRepositoryMock, never()).reserveSeats(anyLong(), anyInt());
+        verify(bookingRepositoryMock, never()).save(any());
+    }
+
+    @Test
+    void should_ensure_seats_are_not_blocked_for_less_than_15_minutes() {
+        // GIVEN
+        Long userId = 1L;
+        BookingItem item = new BookingItem(null, null, 10L, 2, new BigDecimal("12.50"));
+        List<BookingItem> items = List.of(item);
+
+        when(screeningRepositoryMock.reserveSeats(10L, 2)).thenReturn(true);
+        when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // WHEN
+        Booking createdBooking = bookingService.createBooking(userId, items);
+
+        // THEN
+        assertNotNull(createdBooking.expiresAt());
+        assertNotNull(createdBooking.createdAt());
+        assertFalse(createdBooking.expiresAt().isBefore(createdBooking.createdAt().plusMinutes(15)));
+        long minutesBetween = Duration.between(createdBooking.createdAt(), createdBooking.expiresAt()).toMinutes();
+        assertTrue(minutesBetween >= 15);
+    }
+
+    @Test
+    void should_ensure_seats_are_not_blocked_for_more_than_15_minutes() {
+        // GIVEN
+        Long userId = 1L;
+        BookingItem item = new BookingItem(null, null, 10L, 2, new BigDecimal("12.50"));
+        List<BookingItem> items = List.of(item);
+
+        when(screeningRepositoryMock.reserveSeats(10L, 2)).thenReturn(true);
+        when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // WHEN
+        Booking createdBooking = bookingService.createBooking(userId, items);
+
+        // THEN
+        assertNotNull(createdBooking.expiresAt());
+        assertNotNull(createdBooking.createdAt());
+        assertFalse(createdBooking.expiresAt().isAfter(createdBooking.createdAt().plusMinutes(15)));
+        long minutesBetween = Duration.between(createdBooking.createdAt(), createdBooking.expiresAt()).toMinutes();
+        assertEquals(15, minutesBetween);
+    }
+
+    @Test
+    void should_throw_exception_when_no_seats_are_available_for_screening() {
+        // GIVEN
+        Long userId = 1L;
+        BookingItem item = new BookingItem(null, null, 10L, 3, new BigDecimal("12.50"));
+        List<BookingItem> items = List.of(item);
+
+        when(screeningRepositoryMock.reserveSeats(10L, 3)).thenReturn(false);
+
+        // WHEN & THEN
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                bookingService.createBooking(userId, items)
+        );
+
+        assertTrue(exception.getMessage().contains("Not enough available seats for screening id: 10"));
+        verify(screeningRepositoryMock).reserveSeats(10L, 3);
+        verify(bookingRepositoryMock, never()).save(any());
+    }
+
+    @Test
+    void should_allow_booking_after_cancelling_previous_booking_that_held_last_available_seats() {
+        // GIVEN
+        Long userId = 1L;
+        Long screeningId = 10L;
+        Long firstBookingId = 100L;
+        Long secondBookingId = 101L;
+
+        BookingItem firstBookingItem = new BookingItem(null, null, screeningId, 2, new BigDecimal("12.50"));
+        BookingItem secondBookingItem = new BookingItem(null, null, screeningId, 1, new BigDecimal("12.50"));
+
+        // Step 1: User reserves the last 2 seats
+        when(screeningRepositoryMock.reserveSeats(screeningId, 2)).thenReturn(true);
+        when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Booking firstBooking = bookingService.createBooking(userId, List.of(firstBookingItem));
+        assertEquals(BookingStatus.PENDING, firstBooking.status());
+        verify(screeningRepositoryMock).reserveSeats(screeningId, 2);
+
+        // Step 2: Since all seats are held, reserving another seat would fail
+        when(screeningRepositoryMock.reserveSeats(screeningId, 1)).thenReturn(false);
+        assertThrows(IllegalStateException.class, () ->
+                bookingService.createBooking(userId, List.of(secondBookingItem))
+        );
+
+        // Step 3: User cancels the first booking holding the 2 seats
+        Booking firstBookingWithId = new Booking(
+                firstBookingId,
+                userId,
+                new BigDecimal("25.00"),
+                BookingStatus.PENDING,
+                firstBooking.expiresAt(),
+                firstBooking.createdAt(),
+                List.of(new BookingItem(1L, firstBookingId, screeningId, 2, new BigDecimal("12.50")))
+        );
+        when(bookingRepositoryMock.findById(firstBookingId)).thenReturn(Optional.of(firstBookingWithId));
+
+        Booking cancelledBooking = bookingService.cancelBooking(firstBookingId);
+        assertEquals(BookingStatus.CANCELLED, cancelledBooking.status());
+        verify(screeningRepositoryMock).releaseSeats(screeningId, 2);
+
+        // Step 4: Now that 2 seats were released back, reserving 1 seat succeeds
+        when(screeningRepositoryMock.reserveSeats(screeningId, 1)).thenReturn(true);
+        Booking secondBooking = bookingService.createBooking(userId, List.of(secondBookingItem));
+        assertNotNull(secondBooking);
+        assertEquals(BookingStatus.PENDING, secondBooking.status());
+
+        // Step 5: User proceeds to payment and confirms the 1-seat booking
+        Booking secondBookingWithId = new Booking(
+                secondBookingId,
+                userId,
+                new BigDecimal("12.50"),
+                BookingStatus.PENDING,
+                secondBooking.expiresAt(),
+                secondBooking.createdAt(),
+                List.of(new BookingItem(2L, secondBookingId, screeningId, 1, new BigDecimal("12.50")))
+        );
+        User user = new User(userId, "user@cinema.com", "User Name", LocalDateTime.now());
+        when(bookingRepositoryMock.findById(secondBookingId)).thenReturn(Optional.of(secondBookingWithId));
+        when(paymentGatewayMock.processPayment(eq(secondBookingId), eq(new BigDecimal("12.50")), any())).thenReturn(true);
+        when(userRepositoryMock.findById(userId)).thenReturn(Optional.of(user));
+
+        Booking confirmedBooking = bookingService.confirmBookingPayment(secondBookingId, "tok_visa");
+
+        // THEN
+        assertEquals(BookingStatus.CONFIRMED, confirmedBooking.status());
+        verify(paymentGatewayMock).processPayment(secondBookingId, new BigDecimal("12.50"), "tok_visa");
+        verify(notificationMock).sendBookingConfirmationEmail(eq(user), any(Booking.class));
     }
 }

@@ -54,6 +54,9 @@ public class BookingService implements
 
     @Override
     public Booking createBooking(Long userId, List<BookingItem> bookingItems) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id cannot be null");
+        }
         if (bookingItems == null || bookingItems.isEmpty()) {
             throw new IllegalArgumentException("Booking items cannot be empty");
         }
