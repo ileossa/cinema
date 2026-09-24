@@ -1,21 +1,29 @@
 spring:
-  postgresql:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cinema_db}
-    username: ${SPRING_DATASOURCE_USERNAME:cinema_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:cinema_password}
+  application:
+    name: cinema-app
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/${POSTGRES_DB:cinema_db}}
+    username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:cinema_user}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:cinema_password}}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: validate #car j'utilise flyway, donc pas besoin d'avoir une génération des table sql depuis les entity
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
         format_sql: true
 
+  security:
+    user:
+      name: root
+      password: root
+
 rustfs:
-  url: http://localhost:9000
-  access-key: rustfsadmin
-  secret-key: rustfsadmin
-  bucket-name: cinema-media
-  region: us-east-1
+  url: ${RUSTFS_URL:http://localhost:9000}
+  access-key: ${RUSTFS_ACCESS_KEY:rustfsadmin}
+  secret-key: ${RUSTFS_SECRET_KEY:rustfsadmin}
+  bucket-name: ${RUSTFS_BUCKET_NAME:cinema-media}
+  region: ${RUSTFS_REGION:us-east-1}
+
