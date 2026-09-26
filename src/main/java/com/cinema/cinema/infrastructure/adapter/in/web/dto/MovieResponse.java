@@ -6,16 +6,23 @@ public record MovieResponse(
         Long id,
         String title,
         String description,
+        String synopsis,
         int durationMinutes,
-        String posterUrl
+        String posterUrl,
+        String trailerUrl
 ) {
     public static MovieResponse fromDomain(Movie movie) {
+        if (movie == null) {
+            return null;
+        }
         return new MovieResponse(
                 movie.id(),
                 movie.title(),
                 movie.description(),
+                movie.synopsis(),
                 movie.durationMinutes(),
-                movie.posterUrl()
+                movie.posterUrl(),
+                movie.trailerUrl()
         );
     }
 }

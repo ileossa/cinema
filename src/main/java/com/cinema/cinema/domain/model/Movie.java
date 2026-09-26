@@ -1,13 +1,14 @@
 package com.cinema.cinema.domain.model;
 
-
 public record Movie(
         Long id,
         String title,
         String description,
+        String synopsis,
         int durationMinutes,
         String poster,
-        String posterUrl
+        String posterUrl,
+        String trailerUrl
 ) {
 
     public Movie {
@@ -36,10 +37,11 @@ public record Movie(
         }
     }
 
-    public Movie withPosterUrl(String newUrl){
-        return new Movie(id,title,description, durationMinutes,poster,newUrl);
+    public Movie(Long id, String title, String description, int durationMinutes, String poster, String posterUrl) {
+        this(id, title, description, null, durationMinutes, poster, posterUrl, null);
     }
 
-
-
+    public Movie withPosterUrl(String newUrl) {
+        return new Movie(id, title, description, synopsis, durationMinutes, poster, newUrl, trailerUrl);
+    }
 }

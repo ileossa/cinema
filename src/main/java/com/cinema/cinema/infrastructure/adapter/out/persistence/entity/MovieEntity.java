@@ -11,8 +11,11 @@ public class MovieEntity {
     private Long id;
     private String title;
     private String description;
+    private String synopsis;
     private int durationMinutes;
     private String posterFileName;
+    @Column(name = "trailer_url")
+    private String trailerUrl;
 
     public Long getId() {
         return id;
@@ -38,6 +41,14 @@ public class MovieEntity {
         this.description = description;
     }
 
+    public String getSynopsis() {
+        return synopsis;
+    }
+
+    public void setSynopsis(String synopsis) {
+        this.synopsis = synopsis;
+    }
+
     public int getDurationMinutes() {
         return durationMinutes;
     }
@@ -52,5 +63,13 @@ public class MovieEntity {
 
     public void setPosterFileName(String posterFileName) {
         this.posterFileName = posterFileName;
+    }
+
+    public String getTrailerUrl() {
+        return trailerUrl;
+    }
+
+    public void setTrailerUrl(String trailerUrl) {
+        this.trailerUrl = trailerUrl;
     }
 }

@@ -6,10 +6,9 @@ import java.math.BigDecimal;
 
 public record BookingItemRequest(
         Long screeningId,
-        int seatCount,
-        BigDecimal unitPrice
+        int seatCount
 ) {
     public BookingItem toDomain() {
-        return new BookingItem(null, null, screeningId, seatCount, unitPrice);
+        return new BookingItem(null, null, screeningId, seatCount, BigDecimal.ZERO);
     }
 }

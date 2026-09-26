@@ -1,38 +1,74 @@
 package com.cinema.cinema.domain.service;
 
-import com.cinema.cinema.domain.model.Booking;
-import com.cinema.cinema.domain.model.BookingItem;
-import com.cinema.cinema.domain.model.BookingStatus;
-import com.cinema.cinema.domain.port.in.CancelBookingUseCase;
-import com.cinema.cinema.domain.port.in.ConfirmBookingPaymentUseCase;
-import com.cinema.cinema.domain.port.in.CreateBookingUseCase;
-import com.cinema.cinema.domain.port.in.GetUserBookingsUseCase;
-import com.cinema.cinema.domain.port.in.ReleaseExpiredBookingsUseCase;
-import com.cinema.cinema.domain.port.out.BookingRepositoryOut;
-import com.cinema.cinema.domain.port.out.NotificationOut;
-import com.cinema.cinema.domain.port.out.PaymentGatewayOut;
-import com.cinema.cinema.domain.port.out.ScreeningRepositoryOut;
-import com.cinema.cinema.domain.port.out.UserRepositoryOut;
+import com.cinema.cinema.domain.model.*;
+import com.cinema.cinema.domain.model.state.BookingFlowStateName;
+import com.cinema.cinema.domain.model.state.LoginRequiredState;
+import com.cinema.cinema.domain.model.state.PaymentState;
+import com.cinema.cinema.domain.port.in.*;
+import com.cinema.cinema.domain.port.out.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BookingService implements
         CreateBookingUseCase,
         ConfirmBookingPaymentUseCase,
         CancelBookingUseCase,
         ReleaseExpiredBookingsUseCase,
-        GetUserBookingsUseCase {
+        GetUserBookingsUseCase,
+        ProcessBookingFlowUseCase,
+        GetBookingFlowStatusUseCase {
 
     private static final int EXPIRATION_MINUTES = 15;
+    private static final BigDecimal DEFAULT_UNIT_PRICE = new BigDecimal("12.50");
 
     private final BookingRepositoryOut bookingRepositoryOut;
     private final ScreeningRepositoryOut screeningRepositoryOut;
     private final PaymentGatewayOut paymentGatewayOut;
     private final NotificationOut notificationOut;
     private final UserRepositoryOut userRepositoryOut;
+    private final QrCodeGeneratorOut qrCodeGeneratorOut;
+    private final MediaStorageOut mediaStorageOut;
+    private final JwtTokenProvider jwtTokenProvider;
+
+    private final Map<String, BookingFlowContext> flowSessions = new ConcurrentHashMap<>();
+
+    public BookingService(
+            BookingRepositoryOut bookingRepositoryOut,
+            ScreeningRepositoryOut screeningRepositoryOut,
+            PaymentGatewayOut paymentGatewayOut,
+            NotificationOut notificationOut,
+            UserRepositoryOut userRepositoryOut,
+            QrCodeGeneratorOut qrCodeGeneratorOut,
+            MediaStorageOut mediaStorageOut,
+            JwtTokenProvider jwtTokenProvider
+    ) {
+        this.bookingRepositoryOut = bookingRepositoryOut;
+        this.screeningRepositoryOut = screeningRepositoryOut;
+        this.paymentGatewayOut = paymentGatewayOut;
+        this.notificationOut = notificationOut;
+        this.userRepositoryOut = userRepositoryOut;
+        this.qrCodeGeneratorOut = qrCodeGeneratorOut;
+        this.mediaStorageOut = mediaStorageOut;
+        this.jwtTokenProvider = jwtTokenProvider != null ? jwtTokenProvider : new JwtTokenProvider();
+    }
+
+    public BookingService(
+            BookingRepositoryOut bookingRepositoryOut,
+            ScreeningRepositoryOut screeningRepositoryOut,
+            PaymentGatewayOut paymentGatewayOut,
+            NotificationOut notificationOut,
+            UserRepositoryOut userRepositoryOut,
+            QrCodeGeneratorOut qrCodeGeneratorOut,
+            MediaStorageOut mediaStorageOut
+    ) {
+        this(bookingRepositoryOut, screeningRepositoryOut, paymentGatewayOut, notificationOut, userRepositoryOut, qrCodeGeneratorOut, mediaStorageOut, null);
+    }
 
     public BookingService(
             BookingRepositoryOut bookingRepositoryOut,
@@ -41,15 +77,11 @@ public class BookingService implements
             NotificationOut notificationOut,
             UserRepositoryOut userRepositoryOut
     ) {
-        this.bookingRepositoryOut = bookingRepositoryOut;
-        this.screeningRepositoryOut = screeningRepositoryOut;
-        this.paymentGatewayOut = paymentGatewayOut;
-        this.notificationOut = notificationOut;
-        this.userRepositoryOut = userRepositoryOut;
+        this(bookingRepositoryOut, screeningRepositoryOut, paymentGatewayOut, notificationOut, userRepositoryOut, null, null, null);
     }
 
     public BookingService(BookingRepositoryOut bookingRepositoryOut, ScreeningRepositoryOut screeningRepositoryOut) {
-        this(bookingRepositoryOut, screeningRepositoryOut, null, null, null);
+        this(bookingRepositoryOut, screeningRepositoryOut, null, null, null, null, null, null);
     }
 
     @Override
@@ -65,6 +97,8 @@ public class BookingService implements
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (BookingItem item : bookingItems) {
+            Optional<Screening> screeningOpt = screeningRepositoryOut.findById(item.screeningId());
+            Screening screening = screeningOpt.orElse(null);
             boolean reserved = screeningRepositoryOut.reserveSeats(item.screeningId(), item.seatCount());
             if (!reserved) {
                 // Rollback previously reserved seats in this request
@@ -73,8 +107,10 @@ public class BookingService implements
                 }
                 throw new IllegalStateException("Not enough available seats for screening id: " + item.screeningId());
             }
-            reservedItems.add(item);
-            totalAmount = totalAmount.add(item.subTotal());
+            BigDecimal unitPrice = (screening != null && screening.unitPrice() != null) ? screening.unitPrice() : DEFAULT_UNIT_PRICE;
+            BookingItem secureItem = new BookingItem(item.id(), item.bookingId(), item.screeningId(), item.seatCount(), unitPrice);
+            reservedItems.add(secureItem);
+            totalAmount = totalAmount.add(secureItem.subTotal());
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -100,7 +136,10 @@ public class BookingService implements
     public Booking confirmBookingPayment(Long bookingId, String paymentToken) {
         Booking booking = bookingRepositoryOut.findById(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found with id: " + bookingId));
+        return confirmBookingPaymentInternal(booking, paymentToken, null);
+    }
 
+    private Booking confirmBookingPaymentInternal(Booking booking, String paymentToken, BookingFlowContext context) {
         if (booking.status() != BookingStatus.PENDING) {
             throw new IllegalStateException("Only PENDING bookings can be confirmed");
         }
@@ -138,7 +177,7 @@ public class BookingService implements
                         booking.items()
                 );
                 bookingRepositoryOut.save(cancelledBooking);
-                throw new IllegalStateException("Payment failed for booking id: " + bookingId);
+                throw new IllegalStateException("Payment failed for booking id: " + booking.id());
             }
         }
 
@@ -154,9 +193,31 @@ public class BookingService implements
 
         Booking saved = bookingRepositoryOut.save(confirmedBooking);
 
+        String qrCodeUrl = null;
+        if (mediaStorageOut != null) {
+            qrCodeUrl = mediaStorageOut.generateUrlAccesMedia("tickets/booking-" + saved.id() + "-qr.png");
+        }
+        byte[] qrCodeBytes = null;
+        if (qrCodeGeneratorOut != null && saved.userId() != null) {
+            qrCodeBytes = qrCodeGeneratorOut.generateQrCodeImage("CINEMA-TICKET:" + saved.id() + ":" + saved.userId(), 250, 250);
+        }
+
+        if (context != null) {
+            context.setQrCodeUrl(qrCodeUrl);
+            context.setQrCodeData(qrCodeBytes);
+        }
+
         if (notificationOut != null && userRepositoryOut != null && booking.userId() != null) {
+            final String finalQrUrl = qrCodeUrl;
+            final byte[] finalQrBytes = qrCodeBytes;
             userRepositoryOut.findById(booking.userId())
-                    .ifPresent(user -> notificationOut.sendBookingConfirmationEmail(user, saved));
+                    .ifPresent(user -> {
+                        if (finalQrUrl != null || finalQrBytes != null) {
+                            notificationOut.sendBookingConfirmationEmail(user, saved, finalQrUrl, finalQrBytes);
+                        } else {
+                            notificationOut.sendBookingConfirmationEmail(user, saved);
+                        }
+                    });
         }
 
         return saved;
@@ -217,5 +278,162 @@ public class BookingService implements
     @Override
     public List<Booking> getUserBookings(Long userId) {
         return bookingRepositoryOut.findByUserId(userId);
+    }
+
+    // --- ProcessBookingFlowUseCase & GetBookingFlowStatusUseCase Implementations ---
+
+    @Override
+    public BookingFlowContext startFlow() {
+        BookingFlowContext context = new BookingFlowContext();
+        flowSessions.put(context.getFlowSessionId(), context);
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext getFlowStatus(String flowSessionId) {
+        BookingFlowContext context = flowSessions.get(flowSessionId);
+        if (context == null) {
+            throw new IllegalArgumentException("Booking flow session not found: " + flowSessionId);
+        }
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext selectMovie(String flowSessionId, Long movieId) {
+        BookingFlowContext context = getOrCreateSession(flowSessionId);
+        context.selectMovie(movieId);
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext selectScreening(String flowSessionId, Long screeningId) {
+        BookingFlowContext context = getOrCreateSession(flowSessionId);
+        Optional<Screening> screeningOpt = screeningRepositoryOut.findById(screeningId);
+        screeningOpt.ifPresent(s -> {
+            if (s.unitPrice() != null) {
+                context.setUnitPrice(s.unitPrice());
+            }
+        });
+        context.selectScreening(screeningId);
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext selectSeats(String flowSessionId, int seatCount, Long userId) {
+        BookingFlowContext context = getOrCreateSession(flowSessionId);
+        if (userId != null) {
+            context.setAuthenticatedUserId(userId);
+        }
+        context.selectSeats(seatCount);
+        if (context.getStateName() == BookingFlowStateName.AUTHENTICATED) {
+            holdSeatsAndCreatePendingBooking(context);
+        }
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext authenticate(String flowSessionId, Long userId) {
+        BookingFlowContext context = getOrCreateSession(flowSessionId);
+        if (userId != null) {
+            context.authenticate(userId);
+            if (context.getStateName() == BookingFlowStateName.AUTHENTICATED) {
+                holdSeatsAndCreatePendingBooking(context);
+            }
+        } else {
+            context.setState(new LoginRequiredState());
+        }
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext authenticate(String flowSessionId, String token) {
+        BookingFlowContext context = getOrCreateSession(flowSessionId);
+        if (token != null && !token.isBlank() && jwtTokenProvider != null && jwtTokenProvider.validateToken(token)) {
+            Long userId = jwtTokenProvider.getUserIdFromToken(token);
+            context.authenticate(userId);
+            if (context.getStateName() == BookingFlowStateName.AUTHENTICATED) {
+                holdSeatsAndCreatePendingBooking(context);
+            }
+        } else {
+            context.setState(new LoginRequiredState());
+        }
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext processPayment(String flowSessionId, String paymentToken, Long authenticatedUserId) {
+        BookingFlowContext context = getOrCreateSession(flowSessionId);
+        if (authenticatedUserId == null) {
+            throw new IllegalArgumentException("User authentication required to process payment");
+        }
+        if (context.getAuthenticatedUserId() == null || !authenticatedUserId.equals(context.getAuthenticatedUserId())) {
+            throw new IllegalArgumentException("Authenticated user does not match booking context");
+        }
+        Booking booking = context.getBooking();
+        if (booking == null) {
+            throw new IllegalStateException("No active booking to pay for in session: " + flowSessionId);
+        }
+
+        Booking confirmed = confirmBookingPaymentInternal(booking, paymentToken, context);
+        context.setBooking(confirmed);
+        context.processPayment(paymentToken);
+        return context;
+    }
+
+    @Override
+    public BookingFlowContext cancelFlow(String flowSessionId) {
+        BookingFlowContext context = flowSessions.get(flowSessionId);
+        if (context != null) {
+            if (context.getBooking() != null && context.getBooking().id() != null) {
+                cancelBooking(context.getBooking().id());
+            }
+            context.cancel();
+        }
+        return context;
+    }
+
+    private BookingFlowContext getOrCreateSession(String flowSessionId) {
+        if (flowSessionId == null || flowSessionId.isBlank()) {
+            return startFlow();
+        }
+        return flowSessions.computeIfAbsent(flowSessionId, BookingFlowContext::new);
+    }
+
+    private void holdSeatsAndCreatePendingBooking(BookingFlowContext context) {
+        if (context.getSelectedScreeningId() == null || context.getSelectedSeatCount() == null) {
+            return;
+        }
+        if (context.getBooking() != null) {
+            return;
+        }
+
+        boolean reserved = screeningRepositoryOut.reserveSeats(context.getSelectedScreeningId(), context.getSelectedSeatCount());
+        if (!reserved) {
+            throw new IllegalStateException("Not enough available seats for screening id: " + context.getSelectedScreeningId());
+        }
+
+        BigDecimal unitPrice = context.getUnitPrice();
+        if (unitPrice == null) {
+            Optional<Screening> screeningOpt = screeningRepositoryOut.findById(context.getSelectedScreeningId());
+            unitPrice = screeningOpt.map(Screening::unitPrice).filter(p -> p != null).orElse(DEFAULT_UNIT_PRICE);
+            context.setUnitPrice(unitPrice);
+        }
+        BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(context.getSelectedSeatCount()));
+        BookingItem item = new BookingItem(null, null, context.getSelectedScreeningId(), context.getSelectedSeatCount(), unitPrice);
+
+        LocalDateTime now = LocalDateTime.now();
+        Booking booking = new Booking(
+                null,
+                context.getAuthenticatedUserId(),
+                totalAmount,
+                BookingStatus.PENDING,
+                now.plusMinutes(EXPIRATION_MINUTES),
+                now,
+                List.of(item)
+        );
+
+        Booking savedBooking = bookingRepositoryOut.save(booking);
+        context.setBooking(savedBooking);
+        context.setState(new PaymentState());
     }
 }

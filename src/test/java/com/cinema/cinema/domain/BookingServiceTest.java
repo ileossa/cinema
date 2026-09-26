@@ -1,14 +1,8 @@
 package com.cinema.cinema.domain;
 
-import com.cinema.cinema.domain.model.Booking;
-import com.cinema.cinema.domain.model.BookingItem;
-import com.cinema.cinema.domain.model.BookingStatus;
-import com.cinema.cinema.domain.model.User;
-import com.cinema.cinema.domain.port.out.BookingRepositoryOut;
-import com.cinema.cinema.domain.port.out.NotificationOut;
-import com.cinema.cinema.domain.port.out.PaymentGatewayOut;
-import com.cinema.cinema.domain.port.out.ScreeningRepositoryOut;
-import com.cinema.cinema.domain.port.out.UserRepositoryOut;
+import com.cinema.cinema.domain.model.*;
+import com.cinema.cinema.domain.model.state.BookingFlowStateName;
+import com.cinema.cinema.domain.port.out.*;
 import com.cinema.cinema.domain.service.BookingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -34,6 +28,8 @@ public class BookingServiceTest {
     private PaymentGatewayOut paymentGatewayMock;
     private NotificationOut notificationMock;
     private UserRepositoryOut userRepositoryMock;
+    private QrCodeGeneratorOut qrCodeGeneratorMock;
+    private MediaStorageOut mediaStorageMock;
     private BookingService bookingService;
 
     @BeforeEach
@@ -43,13 +39,17 @@ public class BookingServiceTest {
         paymentGatewayMock = mock(PaymentGatewayOut.class);
         notificationMock = mock(NotificationOut.class);
         userRepositoryMock = mock(UserRepositoryOut.class);
+        qrCodeGeneratorMock = mock(QrCodeGeneratorOut.class);
+        mediaStorageMock = mock(MediaStorageOut.class);
 
         bookingService = new BookingService(
                 bookingRepositoryMock,
                 screeningRepositoryMock,
                 paymentGatewayMock,
                 notificationMock,
-                userRepositoryMock
+                userRepositoryMock,
+                qrCodeGeneratorMock,
+                mediaStorageMock
         );
     }
 
@@ -61,6 +61,11 @@ public class BookingServiceTest {
         BookingItem item2 = new BookingItem(null, null, 20L, 1, new BigDecimal("10.00"));
         List<BookingItem> items = List.of(item1, item2);
 
+        Screening s1 = new Screening(10L, 1L, LocalDateTime.now().plusDays(1), "Salle 1", 50, new BigDecimal("12.50"));
+        Screening s2 = new Screening(20L, 1L, LocalDateTime.now().plusDays(1), "Salle 2", 50, new BigDecimal("10.00"));
+
+        when(screeningRepositoryMock.findById(10L)).thenReturn(Optional.of(s1));
+        when(screeningRepositoryMock.findById(20L)).thenReturn(Optional.of(s2));
         when(screeningRepositoryMock.reserveSeats(10L, 2)).thenReturn(true);
         when(screeningRepositoryMock.reserveSeats(20L, 1)).thenReturn(true);
         when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -474,5 +479,214 @@ public class BookingServiceTest {
         assertEquals(BookingStatus.CONFIRMED, confirmedBooking.status());
         verify(paymentGatewayMock).processPayment(secondBookingId, new BigDecimal("12.50"), "tok_visa");
         verify(notificationMock).sendBookingConfirmationEmail(eq(user), any(Booking.class));
+    }
+
+    @Test
+    void should_orchestrate_booking_flow_nominal_scenario() {
+        // GIVEN
+        Long userId = 42L;
+        Long movieId = 5L;
+        Long screeningId = 10L;
+        int seatCount = 2;
+        String paymentToken = "tok_visa";
+        User user = new User(userId, "john@cinema.com", "John Doe", LocalDateTime.now());
+
+        when(screeningRepositoryMock.reserveSeats(screeningId, seatCount)).thenReturn(true);
+        when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking b = invocation.getArgument(0);
+            return new Booking(
+                    b.id() != null ? b.id() : 100L,
+                    b.userId(),
+                    b.totalAmount(),
+                    b.status(),
+                    b.expiresAt(),
+                    b.createdAt(),
+                    b.items()
+            );
+        });
+        when(bookingRepositoryMock.findById(100L)).thenAnswer(inv -> Optional.of(new Booking(
+                100L,
+                userId,
+                new BigDecimal("25.00"),
+                BookingStatus.PENDING,
+                LocalDateTime.now().plusMinutes(15),
+                LocalDateTime.now(),
+                List.of(new BookingItem(1L, 100L, screeningId, seatCount, new BigDecimal("12.50")))
+        )));
+        when(paymentGatewayMock.processPayment(eq(100L), eq(new BigDecimal("25.00")), eq(paymentToken))).thenReturn(true);
+        when(userRepositoryMock.findById(userId)).thenReturn(Optional.of(user));
+        when(mediaStorageMock.generateUrlAccesMedia(anyString())).thenReturn("https://storage/ticket-100-qr.png");
+        when(qrCodeGeneratorMock.generateQrCodeImage(anyString(), anyInt(), anyInt())).thenReturn(new byte[]{1, 2, 3});
+
+        // Step 1: Start flow
+        BookingFlowContext context = bookingService.startFlow();
+        assertNotNull(context.getFlowSessionId());
+        assertEquals(BookingFlowStateName.SELECT_MOVIE, context.getStateName());
+
+        // Step 2: Select movie
+        context = bookingService.selectMovie(context.getFlowSessionId(), movieId);
+        assertEquals(movieId, context.getSelectedMovieId());
+        assertEquals(BookingFlowStateName.SELECT_SCREENING, context.getStateName());
+
+        // Step 3: Select screening
+        context = bookingService.selectScreening(context.getFlowSessionId(), screeningId);
+        assertEquals(screeningId, context.getSelectedScreeningId());
+        assertEquals(BookingFlowStateName.SELECT_SEATS, context.getStateName());
+
+        // Step 4: Select seats without auth -> transitions to LOGIN_REQUIRED
+        context = bookingService.selectSeats(context.getFlowSessionId(), seatCount, null);
+        assertEquals(seatCount, context.getSelectedSeatCount());
+        assertEquals(BookingFlowStateName.LOGIN_REQUIRED, context.getStateName());
+
+        // Step 5: Authenticate -> holds seats and transitions to PAYMENT
+        context = bookingService.authenticate(context.getFlowSessionId(), userId);
+        assertEquals(userId, context.getAuthenticatedUserId());
+        assertEquals(BookingFlowStateName.PAYMENT, context.getStateName());
+        assertNotNull(context.getBooking());
+        assertEquals(100L, context.getBookingId());
+
+        // Step 6: Process payment -> transitions to CONFIRMED and attaches QR code & URL
+        context = bookingService.processPayment(context.getFlowSessionId(), paymentToken, userId);
+        assertEquals(BookingFlowStateName.CONFIRMED, context.getStateName());
+        assertEquals("https://storage/ticket-100-qr.png", context.getQrCodeUrl());
+        assertNotNull(context.getQrCodeData());
+
+        verify(screeningRepositoryMock).reserveSeats(screeningId, seatCount);
+        verify(paymentGatewayMock).processPayment(100L, new BigDecimal("25.00"), paymentToken);
+        verify(mediaStorageMock).generateUrlAccesMedia("tickets/booking-100-qr.png");
+        verify(qrCodeGeneratorMock).generateQrCodeImage(eq("CINEMA-TICKET:100:42"), eq(250), eq(250));
+        verify(notificationMock).sendBookingConfirmationEmail(eq(user), any(Booking.class), eq("https://storage/ticket-100-qr.png"), any());
+    }
+
+    @Test
+    void should_cancel_flow_and_release_held_seats() {
+        // GIVEN
+        Long userId = 42L;
+        Long screeningId = 10L;
+        int seatCount = 2;
+
+        when(screeningRepositoryMock.reserveSeats(screeningId, seatCount)).thenReturn(true);
+        when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking b = invocation.getArgument(0);
+            return new Booking(
+                    100L,
+                    b.userId(),
+                    b.totalAmount(),
+                    b.status(),
+                    b.expiresAt(),
+                    b.createdAt(),
+                    b.items()
+            );
+        });
+        when(bookingRepositoryMock.findById(100L)).thenReturn(Optional.of(new Booking(
+                100L,
+                userId,
+                new BigDecimal("25.00"),
+                BookingStatus.PENDING,
+                LocalDateTime.now().plusMinutes(15),
+                LocalDateTime.now(),
+                List.of(new BookingItem(1L, 100L, screeningId, seatCount, new BigDecimal("12.50")))
+        )));
+
+        BookingFlowContext context = bookingService.startFlow();
+        bookingService.selectMovie(context.getFlowSessionId(), 1L);
+        bookingService.selectScreening(context.getFlowSessionId(), screeningId);
+        bookingService.selectSeats(context.getFlowSessionId(), seatCount, userId);
+
+        // WHEN: Cancel flow
+        BookingFlowContext cancelledContext = bookingService.cancelFlow(context.getFlowSessionId());
+
+        // THEN
+        assertEquals(BookingFlowStateName.CANCELLED, cancelledContext.getStateName());
+        verify(screeningRepositoryMock).releaseSeats(screeningId, seatCount);
+    }
+
+    @Test
+    void should_authenticate_with_valid_jwt_and_hold_seats_with_expiration() {
+        // GIVEN
+        Long userId = 42L;
+        Long screeningId = 10L;
+        int seatCount = 2;
+        JwtTokenProvider jwtProvider = new JwtTokenProvider("test-secret-key-cinema-test-1234567890", 3600);
+        String token = jwtProvider.generateToken(userId, "alice@cinema.fr", "Alice Dupont");
+
+        BookingService serviceWithJwt = new BookingService(
+                bookingRepositoryMock,
+                screeningRepositoryMock,
+                paymentGatewayMock,
+                notificationMock,
+                userRepositoryMock,
+                qrCodeGeneratorMock,
+                mediaStorageMock,
+                jwtProvider
+        );
+
+        when(screeningRepositoryMock.reserveSeats(screeningId, seatCount)).thenReturn(true);
+        when(bookingRepositoryMock.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking b = invocation.getArgument(0);
+            return new Booking(
+                    100L,
+                    b.userId(),
+                    b.totalAmount(),
+                    b.status(),
+                    b.expiresAt(),
+                    b.createdAt(),
+                    b.items()
+            );
+        });
+
+        BookingFlowContext context = serviceWithJwt.startFlow();
+        serviceWithJwt.selectMovie(context.getFlowSessionId(), 1L);
+        serviceWithJwt.selectScreening(context.getFlowSessionId(), screeningId);
+        serviceWithJwt.selectSeats(context.getFlowSessionId(), seatCount, null);
+        assertEquals(BookingFlowStateName.LOGIN_REQUIRED, context.getStateName());
+
+        // WHEN
+        context = serviceWithJwt.authenticate(context.getFlowSessionId(), token);
+
+        // THEN
+        assertEquals(BookingFlowStateName.PAYMENT, context.getStateName());
+        assertEquals(userId, context.getAuthenticatedUserId());
+        assertNotNull(context.getBooking());
+        assertNotNull(context.getBooking().expiresAt());
+        assertTrue(context.getBooking().expiresAt().isAfter(LocalDateTime.now().plusMinutes(14)));
+    }
+
+    @Test
+    void should_stay_in_login_required_when_invalid_jwt_token() {
+        JwtTokenProvider jwtProvider = new JwtTokenProvider("test-secret-key-cinema-test-1234567890", 3600);
+        BookingService serviceWithJwt = new BookingService(
+                bookingRepositoryMock,
+                screeningRepositoryMock,
+                paymentGatewayMock,
+                notificationMock,
+                userRepositoryMock,
+                qrCodeGeneratorMock,
+                mediaStorageMock,
+                jwtProvider
+        );
+
+        BookingFlowContext context = serviceWithJwt.startFlow();
+        serviceWithJwt.selectMovie(context.getFlowSessionId(), 1L);
+        serviceWithJwt.selectScreening(context.getFlowSessionId(), 10L);
+        serviceWithJwt.selectSeats(context.getFlowSessionId(), 2, null);
+
+        // WHEN: Authenticate with invalid token
+        context = serviceWithJwt.authenticate(context.getFlowSessionId(), "invalid.token.here");
+
+        // THEN
+        assertEquals(BookingFlowStateName.LOGIN_REQUIRED, context.getStateName());
+    }
+
+    @Test
+    void should_reject_payment_when_user_is_not_authenticated() {
+        BookingFlowContext context = bookingService.startFlow();
+        bookingService.selectMovie(context.getFlowSessionId(), 1L);
+        bookingService.selectScreening(context.getFlowSessionId(), 10L);
+        bookingService.selectSeats(context.getFlowSessionId(), 2, null);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                bookingService.processPayment(context.getFlowSessionId(), "tok_visa", null)
+        );
     }
 }

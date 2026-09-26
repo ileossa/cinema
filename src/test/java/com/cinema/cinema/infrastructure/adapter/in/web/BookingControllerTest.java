@@ -6,7 +6,6 @@ import com.cinema.cinema.domain.model.BookingStatus;
 import com.cinema.cinema.domain.port.in.CancelBookingUseCase;
 import com.cinema.cinema.domain.port.in.ConfirmBookingPaymentUseCase;
 import com.cinema.cinema.domain.port.in.CreateBookingUseCase;
-import com.cinema.cinema.domain.port.in.GetUserBookingsUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,9 +41,6 @@ class BookingControllerTest {
     @MockitoBean
     private CancelBookingUseCase cancelBookingUseCase;
 
-    @MockitoBean
-    private GetUserBookingsUseCase getUserBookingsUseCase;
-
     @Test
     @DisplayName("doit créer une réservation et retourner 201 Created")
     void shouldCreateBooking() throws Exception {
@@ -67,8 +63,7 @@ class BookingControllerTest {
                     "items": [
                         {
                             "screeningId": 5,
-                            "seatCount": 2,
-                            "unitPrice": 12.50
+                            "seatCount": 2
                         }
                     ]
                 }
@@ -164,25 +159,9 @@ class BookingControllerTest {
     }
 
     @Test
-    @DisplayName("doit récupérer les réservations d'un utilisateur")
-    void shouldGetUserBookings() throws Exception {
-        BookingItem item = new BookingItem(1L, 10L, 5L, 2, new BigDecimal("12.50"));
-        Booking booking = new Booking(
-                10L,
-                1L,
-                new BigDecimal("25.00"),
-                BookingStatus.CONFIRMED,
-                LocalDateTime.of(2026, 9, 24, 10, 15),
-                LocalDateTime.of(2026, 9, 24, 10, 0),
-                List.of(item)
-        );
-
-        given(getUserBookingsUseCase.getUserBookings(1L)).willReturn(List.of(booking));
-
+    @DisplayName("doit retourner 404 pour l'ancienne route /api/v1/bookings/user/{userId} supprimée")
+    void shouldReturn404ForRemovedRoute() throws Exception {
         mockMvc.perform(get("/api/v1/bookings/user/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(10))
-                .andExpect(jsonPath("$[0].userId").value(1));
+                .andExpect(status().isNotFound());
     }
 }

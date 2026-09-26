@@ -5,7 +5,6 @@ import com.cinema.cinema.domain.model.BookingItem;
 import com.cinema.cinema.domain.port.in.CancelBookingUseCase;
 import com.cinema.cinema.domain.port.in.ConfirmBookingPaymentUseCase;
 import com.cinema.cinema.domain.port.in.CreateBookingUseCase;
-import com.cinema.cinema.domain.port.in.GetUserBookingsUseCase;
 import com.cinema.cinema.infrastructure.adapter.in.web.dto.BookingItemRequest;
 import com.cinema.cinema.infrastructure.adapter.in.web.dto.BookingResponse;
 import com.cinema.cinema.infrastructure.adapter.in.web.dto.ConfirmPaymentRequest;
@@ -22,18 +21,15 @@ public class BookingController {
     private final CreateBookingUseCase createBookingUseCase;
     private final ConfirmBookingPaymentUseCase confirmBookingPaymentUseCase;
     private final CancelBookingUseCase cancelBookingUseCase;
-    private final GetUserBookingsUseCase getUserBookingsUseCase;
 
     public BookingController(
             CreateBookingUseCase createBookingUseCase,
             ConfirmBookingPaymentUseCase confirmBookingPaymentUseCase,
-            CancelBookingUseCase cancelBookingUseCase,
-            GetUserBookingsUseCase getUserBookingsUseCase
+            CancelBookingUseCase cancelBookingUseCase
     ) {
         this.createBookingUseCase = createBookingUseCase;
         this.confirmBookingPaymentUseCase = confirmBookingPaymentUseCase;
         this.cancelBookingUseCase = cancelBookingUseCase;
-        this.getUserBookingsUseCase = getUserBookingsUseCase;
     }
 
     @PostMapping
@@ -61,12 +57,5 @@ public class BookingController {
     public BookingResponse cancelBooking(@PathVariable("id") Long id) {
         Booking booking = cancelBookingUseCase.cancelBooking(id);
         return BookingResponse.fromDomain(booking);
-    }
-
-    @GetMapping("/user/{userId}")
-    public List<BookingResponse> getUserBookings(@PathVariable("userId") Long userId) {
-        return getUserBookingsUseCase.getUserBookings(userId).stream()
-                .map(BookingResponse::fromDomain)
-                .toList();
     }
 }

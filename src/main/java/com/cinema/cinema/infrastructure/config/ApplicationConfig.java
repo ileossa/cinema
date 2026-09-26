@@ -1,16 +1,7 @@
 package com.cinema.cinema.infrastructure.config;
 
-import com.cinema.cinema.domain.port.out.BookingRepositoryOut;
-import com.cinema.cinema.domain.port.out.MediaStorageOut;
-import com.cinema.cinema.domain.port.out.MovieRepositoryOut;
-import com.cinema.cinema.domain.port.out.NotificationOut;
-import com.cinema.cinema.domain.port.out.PaymentGatewayOut;
-import com.cinema.cinema.domain.port.out.ScreeningRepositoryOut;
-import com.cinema.cinema.domain.port.out.UserRepositoryOut;
-import com.cinema.cinema.domain.service.BookingService;
-import com.cinema.cinema.domain.service.MovieService;
-import com.cinema.cinema.domain.service.ScreeningService;
-import com.cinema.cinema.domain.service.UserService;
+import com.cinema.cinema.domain.port.out.*;
+import com.cinema.cinema.domain.service.*;
 import com.cinema.cinema.infrastructure.adapter.out.notification.EmailNotificationAdapter;
 import com.cinema.cinema.infrastructure.adapter.out.payment.StripePaymentAdapter;
 import com.cinema.cinema.infrastructure.adapter.out.persistence.PostgresBookingAdapter;
@@ -21,6 +12,7 @@ import com.cinema.cinema.infrastructure.adapter.out.persistence.repository.Sprin
 import com.cinema.cinema.infrastructure.adapter.out.persistence.repository.SpringDataMovieRepository;
 import com.cinema.cinema.infrastructure.adapter.out.persistence.repository.SpringDataScreeningRepository;
 import com.cinema.cinema.infrastructure.adapter.out.persistence.repository.SpringDataUserRepository;
+import com.cinema.cinema.infrastructure.adapter.out.qrcode.ZxingQrCodeAdapter;
 import com.cinema.cinema.infrastructure.adapter.out.storage.RustFsStorageAdapter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -70,8 +62,13 @@ public class ApplicationConfig {
     }
 
     @Bean
-    public NotificationOut notificationOut() {
-        return new EmailNotificationAdapter();
+    public QrCodeGeneratorOut qrCodeGeneratorOut() {
+        return new ZxingQrCodeAdapter();
+    }
+
+    @Bean
+    public NotificationOut notificationOut(MediaStorageOut mediaStorageOut) {
+        return new EmailNotificationAdapter(mediaStorageOut);
     }
 
     @Bean
@@ -85,13 +82,35 @@ public class ApplicationConfig {
             ScreeningRepositoryOut screeningRepositoryOut,
             PaymentGatewayOut paymentGatewayOut,
             NotificationOut notificationOut,
-            UserRepositoryOut userRepositoryOut
+            UserRepositoryOut userRepositoryOut,
+            QrCodeGeneratorOut qrCodeGeneratorOut,
+            MediaStorageOut mediaStorageOut,
+            JwtTokenProvider jwtTokenProvider
     ) {
-        return new BookingService(bookingRepositoryOut, screeningRepositoryOut, paymentGatewayOut, notificationOut, userRepositoryOut);
+        return new BookingService(
+                bookingRepositoryOut,
+                screeningRepositoryOut,
+                paymentGatewayOut,
+                notificationOut,
+                userRepositoryOut,
+                qrCodeGeneratorOut,
+                mediaStorageOut,
+                jwtTokenProvider
+        );
     }
 
     @Bean
     public UserService userService(UserRepositoryOut userRepositoryOut) {
         return new UserService(userRepositoryOut);
+    }
+
+    @Bean
+    public JwtTokenProvider jwtTokenProvider() {
+        return new JwtTokenProvider();
+    }
+
+    @Bean
+    public AuthService authService(UserRepositoryOut userRepositoryOut, JwtTokenProvider jwtTokenProvider) {
+        return new AuthService(userRepositoryOut, jwtTokenProvider);
     }
 }

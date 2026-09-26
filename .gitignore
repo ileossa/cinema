@@ -38,3 +38,7 @@ build/
 .env.prod
 .env.deployment
 /.secrets/db_password.txt
+
+### Personnal files ###
+*.log
+.junie
