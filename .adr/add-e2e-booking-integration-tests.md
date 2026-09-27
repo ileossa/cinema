@@ -87,10 +87,8 @@ graph LR
         FlowCtrl[BookingFlowController]
         AuthCtrl[AuthController]
         MovieCtrl[MovieController]
-        
         Service[BookingService & AuthService]
         State[BookingFlowContext State Machine]
-        
         Repo[Spring Data JPA Repositories]
         QR[ZxingQrCodeAdapter]
     end
@@ -99,13 +97,12 @@ graph LR
         H2[(H2 Database PostgreSQL Mode)]
     end
 
-    E2E -->|1. GET /movies| MovieCtrl
-    E2E -->|2. POST /booking-flow/start| FlowCtrl
-    E2E -->|3. POST .../select-seats| FlowCtrl
-    E2E -->|4. POST /auth/login| AuthCtrl
-    E2E -->|5. POST .../authenticate| FlowCtrl
-    E2E -->|6. POST .../payment| FlowCtrl
-
+    E2E -->|1 . GET /movies| MovieCtrl
+    E2E -->|2 . POST /booking - flow/start| FlowCtrl
+    E2E -->|3 . POST . . . /select - seats| FlowCtrl
+    E2E -->|4 . POST /auth/login| AuthCtrl
+    E2E -->|5 . POST . . . /authenticate| FlowCtrl
+    E2E -->|6 . POST . . . /payment| FlowCtrl
     FlowCtrl --> Service
     AuthCtrl --> Service
     Service --> State
@@ -116,12 +113,12 @@ graph LR
 
 ### Test Files Structure
 
-- `src/test/resources/application-test.yaml` *(Nouveau)* : configuration H2 et Flyway pour les tests d'intégration.
-- `src/test/java/com/cinema/cinema/integration/AbstractIntegrationTest.java` *(Nouveau)* : classe socle de configuration
-  MockMvc & Helpers JSON.
-- `src/test/java/com/cinema/cinema/integration/CinemaBookingEndToEndIntegrationTest.java` *(Nouveau)* : scénario nominal
-  complet d'achat.
-- `src/test/java/com/cinema/cinema/integration/BookingFlowEdgeCasesIntegrationTest.java` *(Nouveau)* : scénarios
+- `../src/test/resources/application-test.yaml` *(Nouveau)* : configuration H2 et Flyway pour les tests d'intégration.
+- `../src/test/java/com/cinema/cinema/integration/AbstractIntegrationTest.java` *(Nouveau)* : classe socle de
+  configuration MockMvc & Helpers JSON.
+- `../src/test/java/com/cinema/cinema/integration/CinemaBookingEndToEndIntegrationTest.java` *(Nouveau)* : scénario
+  nominal complet d'achat.
+- `../src/test/java/com/cinema/cinema/integration/BookingFlowEdgeCasesIntegrationTest.java` *(Nouveau)* : scénarios
   d'erreurs, expirations, annulations et capacité.
 
 # Testing
@@ -166,18 +163,18 @@ dépendance externe requise (DB PostgreSQL ou RustFS en dur).
 
 # Delivery Steps
 
-### Step 1: Configurer l'environnement et l'infrastructure de test d'intégration
+### ✓ Step 1: Configurer l'environnement et l'infrastructure de test d'intégration
 
 Mettre en place un profil Spring de test avec une base H2 en mode PostgreSQL et des jeux de données d'initialisation.
 
-- Créer `src/test/resources/application-test.yaml` pour configurer la base de données H2 en mémoire
+- Créer `../src/test/resources/application-test.yaml` pour configurer la base de données H2 en mémoire
   (`jdbc:h2:mem:cinema_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE`) et l'exécution automatique des migrations Flyway.
 - Configurer les mocks ou fakes d'infrastructure pour les services externes ne nécessitant pas d'appel réseau réel (ex:
   génération d'URL présignée S3 / RustFS).
 - Créer une classe de base de test d'intégration (`AbstractIntegrationTest`) annotée avec `@SpringBootTest` et
   `@AutoConfigureMockMvc` pour factoriser le contexte Spring et les utilitaires JSON / assertions.
 
-### Step 2: Implémenter le test d'intégration du parcours nominal complet (E2E)
+### ✓ Step 2: Implémenter le test d'intégration du parcours nominal complet (E2E)
 
 Implémenter le scénario complet d'achat de places de cinéma depuis la consultation jusqu'à la confirmation de commande.
 
@@ -197,7 +194,7 @@ Implémenter le scénario complet d'achat de places de cinéma depuis la consult
 - Étape 9 : Vérifier la persistance effective en base (`GET /api/v1/users/{id}/bookings`) et la mise à jour des places
   disponibles de la séance.
 
-### Step 3: Implémenter les tests d'intégration des parcours d'erreur et cas limites
+### ✓ Step 3: Implémenter les tests d'intégration des parcours d'erreur et cas limites
 
 Valider la robustesse du système face aux cas d'erreurs, expirations, annulations et tentatives de manipulation de prix.
 

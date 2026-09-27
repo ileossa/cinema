@@ -92,7 +92,7 @@ public class BookingFlowController {
         return BookingFlowResponse.fromDomain(context);
     }
 
-    @PostMapping("/{flowSessionId}/pay")
+    @PostMapping(path = {"/{flowSessionId}/pay", "/{flowSessionId}/payment"})
     public BookingFlowResponse processPayment(
             @PathVariable("flowSessionId") String flowSessionId,
             @RequestBody BookingFlowStepRequest request

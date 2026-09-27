@@ -4,6 +4,7 @@ import com.cinema.cinema.domain.model.*;
 import com.cinema.cinema.domain.model.state.BookingFlowStateName;
 import com.cinema.cinema.domain.port.out.*;
 import com.cinema.cinema.domain.service.BookingService;
+import com.cinema.cinema.domain.service.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
