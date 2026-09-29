@@ -34,6 +34,10 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(Long userId, String email, String fullName) {
+        return generateToken(userId, email, fullName, java.util.Collections.emptySet());
+    }
+
+    public String generateToken(Long userId, String email, String fullName, java.util.Set<String> roles) {
         try {
             long now = Instant.now().getEpochSecond();
             long exp = now + expirationSeconds;
@@ -47,6 +51,7 @@ public class JwtTokenProvider {
             payloadMap.put("userId", userId);
             payloadMap.put("email", email);
             payloadMap.put("fullName", fullName);
+            payloadMap.put("roles", roles != null ? roles : java.util.Collections.emptySet());
             payloadMap.put("iat", now);
             payloadMap.put("exp", exp);
 
@@ -116,6 +121,21 @@ public class JwtTokenProvider {
             return payload.get("fullName").asText();
         }
         return null;
+    }
+
+    public java.util.Set<String> getRolesFromToken(String token) {
+        JsonNode payload = extractPayload(token);
+        if (payload != null && payload.has("roles")) {
+            JsonNode rolesNode = payload.get("roles");
+            if (rolesNode.isArray()) {
+                java.util.Set<String> roles = new java.util.HashSet<>();
+                for (JsonNode r : rolesNode) {
+                    roles.add(r.asText());
+                }
+                return roles;
+            }
+        }
+        return java.util.Collections.emptySet();
     }
 
     private JsonNode extractPayload(String token) {

@@ -16,6 +16,8 @@ public class MovieEntity {
     private String posterFileName;
     @Column(name = "trailer_url")
     private String trailerUrl;
+    @Column(name = "is_published", nullable = false)
+    private boolean isPublished = true;
 
     public Long getId() {
         return id;
@@ -71,5 +73,13 @@ public class MovieEntity {
 
     public void setTrailerUrl(String trailerUrl) {
         this.trailerUrl = trailerUrl;
+    }
+
+    public boolean isPublished() {
+        return isPublished;
+    }
+
+    public void setPublished(boolean published) {
+        isPublished = published;
     }
 }

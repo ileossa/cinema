@@ -1,15 +1,15 @@
 package com.cinema.cinema.infrastructure.adapter.in.web;
 
-import com.cinema.cinema.domain.model.Booking;
-import com.cinema.cinema.domain.model.BookingItem;
-import com.cinema.cinema.domain.model.BookingStatus;
-import com.cinema.cinema.domain.model.User;
+import com.cinema.cinema.domain.model.*;
+import com.cinema.cinema.domain.port.in.ChangeUserRoleUseCase;
 import com.cinema.cinema.domain.port.in.GetUserBookingsUseCase;
 import com.cinema.cinema.domain.port.in.GetUserProfileUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -17,13 +17,16 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
+@WithMockUser(roles = "ADMIN")
 class UserControllerTest {
 
     @Autowired
@@ -34,6 +37,9 @@ class UserControllerTest {
 
     @MockitoBean
     private GetUserBookingsUseCase getUserBookingsUseCase;
+
+    @MockitoBean
+    private ChangeUserRoleUseCase changeUserRoleUseCase;
 
     @Test
     @DisplayName("doit retourner le profil utilisateur quand il existe")
@@ -77,5 +83,19 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(10));
+    }
+
+    @Test
+    @DisplayName("doit changer le rôle d'un utilisateur")
+    void shouldChangeUserRole() throws Exception {
+        User updated = new User(1L, "alice@cinema.fr", "Alice Dupont", Set.of(new Role(1L, "ADMIN")), LocalDateTime.of(2026, 9, 24, 10, 0));
+        given(changeUserRoleUseCase.assignRole(1L, "ADMIN")).willReturn(updated);
+
+        mockMvc.perform(patch("/api/v1/users/1/role")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\": \"ADMIN\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.roles[0]").value("ADMIN"));
     }
 }

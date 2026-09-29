@@ -9,8 +9,13 @@ public record MovieResponse(
         String synopsis,
         int durationMinutes,
         String posterUrl,
-        String trailerUrl
+        String trailerUrl,
+        boolean isPublished
 ) {
+    public MovieResponse(Long id, String title, String description, String synopsis, int durationMinutes, String posterUrl, String trailerUrl) {
+        this(id, title, description, synopsis, durationMinutes, posterUrl, trailerUrl, true);
+    }
+
     public static MovieResponse fromDomain(Movie movie) {
         if (movie == null) {
             return null;
@@ -22,7 +27,8 @@ public record MovieResponse(
                 movie.synopsis(),
                 movie.durationMinutes(),
                 movie.posterUrl(),
-                movie.trailerUrl()
+                movie.trailerUrl(),
+                movie.isPublished()
         );
     }
 }

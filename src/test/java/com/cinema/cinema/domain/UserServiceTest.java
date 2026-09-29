@@ -1,6 +1,8 @@
 package com.cinema.cinema.domain;
 
+import com.cinema.cinema.domain.model.Role;
 import com.cinema.cinema.domain.model.User;
+import com.cinema.cinema.domain.port.out.RoleRepositoryOut;
 import com.cinema.cinema.domain.port.out.UserRepositoryOut;
 import com.cinema.cinema.domain.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,12 +20,14 @@ import static org.mockito.Mockito.*;
 public class UserServiceTest {
 
     private UserRepositoryOut userRepositoryMock;
+    private RoleRepositoryOut roleRepositoryMock;
     private UserService userService;
 
     @BeforeEach
     void setUp() {
         userRepositoryMock = mock(UserRepositoryOut.class);
-        userService = new UserService(userRepositoryMock);
+        roleRepositoryMock = mock(RoleRepositoryOut.class);
+        userService = new UserService(userRepositoryMock, roleRepositoryMock);
     }
 
     @Test
@@ -53,5 +57,22 @@ public class UserServiceTest {
 
         // THEN
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void should_assign_role_to_user() {
+        Long userId = 1L;
+        User user = new User(userId, "alice@cinema.fr", "Alice", LocalDateTime.now());
+        Role adminRole = new Role(1L, "ADMIN", "Administrator");
+
+        when(userRepositoryMock.findById(userId)).thenReturn(Optional.of(user));
+        when(roleRepositoryMock.findByName("ADMIN")).thenReturn(Optional.of(adminRole));
+        when(userRepositoryMock.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        User updated = userService.assignRole(userId, "ADMIN");
+
+        assertNotNull(updated);
+        assertTrue(updated.roles().contains(adminRole));
+        verify(userRepositoryMock).save(any(User.class));
     }
 }

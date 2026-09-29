@@ -3,6 +3,8 @@ package com.cinema.cinema.infrastructure.adapter.out.persistence.entity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -18,6 +20,14 @@ public class UserEntity {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<RoleEntity> roles = new HashSet<>();
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -25,9 +35,14 @@ public class UserEntity {
     }
 
     public UserEntity(Long id, String email, String fullName, LocalDateTime createdAt) {
+        this(id, email, fullName, new HashSet<>(), createdAt);
+    }
+
+    public UserEntity(Long id, String email, String fullName, Set<RoleEntity> roles, LocalDateTime createdAt) {
         this.id = id;
         this.email = email;
         this.fullName = fullName;
+        this.roles = roles != null ? roles : new HashSet<>();
         this.createdAt = createdAt;
     }
 
@@ -60,6 +75,14 @@ public class UserEntity {
 
     public void setFullName(String fullName) {
         this.fullName = fullName;
+    }
+
+    public Set<RoleEntity> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(Set<RoleEntity> roles) {
+        this.roles = roles != null ? roles : new HashSet<>();
     }
 
     public LocalDateTime getCreatedAt() {

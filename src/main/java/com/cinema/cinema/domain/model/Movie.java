@@ -8,7 +8,8 @@ public record Movie(
         int durationMinutes,
         String poster,
         String posterUrl,
-        String trailerUrl
+        String trailerUrl,
+        boolean isPublished
 ) {
 
     public Movie {
@@ -37,11 +38,19 @@ public record Movie(
         }
     }
 
+    public Movie(Long id, String title, String description, String synopsis, int durationMinutes, String poster, String posterUrl, String trailerUrl) {
+        this(id, title, description, synopsis, durationMinutes, poster, posterUrl, trailerUrl, true);
+    }
+
     public Movie(Long id, String title, String description, int durationMinutes, String poster, String posterUrl) {
-        this(id, title, description, null, durationMinutes, poster, posterUrl, null);
+        this(id, title, description, null, durationMinutes, poster, posterUrl, null, true);
     }
 
     public Movie withPosterUrl(String newUrl) {
-        return new Movie(id, title, description, synopsis, durationMinutes, poster, newUrl, trailerUrl);
+        return new Movie(id, title, description, synopsis, durationMinutes, poster, newUrl, trailerUrl, isPublished);
+    }
+
+    public Movie withPublished(boolean newPublished) {
+        return new Movie(id, title, description, synopsis, durationMinutes, poster, posterUrl, trailerUrl, newPublished);
     }
 }

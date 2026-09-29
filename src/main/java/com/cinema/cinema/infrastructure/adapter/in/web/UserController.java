@@ -1,14 +1,16 @@
 package com.cinema.cinema.infrastructure.adapter.in.web;
 
+import com.cinema.cinema.domain.model.User;
+import com.cinema.cinema.domain.port.in.ChangeUserRoleUseCase;
 import com.cinema.cinema.domain.port.in.GetUserBookingsUseCase;
 import com.cinema.cinema.domain.port.in.GetUserProfileUseCase;
 import com.cinema.cinema.infrastructure.adapter.in.web.dto.BookingResponse;
+import com.cinema.cinema.infrastructure.adapter.in.web.dto.ChangeRoleRequest;
 import com.cinema.cinema.infrastructure.adapter.in.web.dto.UserResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -18,10 +20,14 @@ public class UserController {
 
     private final GetUserProfileUseCase getUserProfileUseCase;
     private final GetUserBookingsUseCase getUserBookingsUseCase;
+    private final ChangeUserRoleUseCase changeUserRoleUseCase;
 
-    public UserController(GetUserProfileUseCase getUserProfileUseCase, GetUserBookingsUseCase getUserBookingsUseCase) {
+    public UserController(GetUserProfileUseCase getUserProfileUseCase,
+                          GetUserBookingsUseCase getUserBookingsUseCase,
+                          ChangeUserRoleUseCase changeUserRoleUseCase) {
         this.getUserProfileUseCase = getUserProfileUseCase;
         this.getUserBookingsUseCase = getUserBookingsUseCase;
+        this.changeUserRoleUseCase = changeUserRoleUseCase;
     }
 
     // TODO: il faut rendre l'appel contraingnant derrière une sécurité.
@@ -38,5 +44,24 @@ public class UserController {
         return getUserBookingsUseCase.getUserBookings(id).stream()
                 .map(BookingResponse::fromDomain)
                 .toList();
+    }
+
+    @PatchMapping("/{id}/role")
+    public ResponseEntity<UserResponse> changeUserRole(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) ChangeRoleRequest request
+    ) {
+        if (changeUserRoleUseCase == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Role management not configured");
+        }
+        if (request == null || request.role() == null || request.role().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is required");
+        }
+        try {
+            User updated = changeUserRoleUseCase.assignRole(id, request.role());
+            return ResponseEntity.ok(UserResponse.fromDomain(updated));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
     }
 }
